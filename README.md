@@ -1,11 +1,11 @@
-# @xdapps/ai
+# @xdappsdev/ai
 
 A thin opinionated wrapper on top of [Vercel AI SDK](https://sdk.vercel.ai/) that introduces **use-case-named profiles** — standardizing provider setup, error handling, logging hooks, and streaming chat endpoints across all XDapps dashboards. Instead of scattering model strings and provider configuration at every call site, you define named profiles once (`customerChat`, `reviewClassifier`, `productImage`) and call them by name. The wrapper normalizes errors into a typed discriminated union so TypeScript forces you to handle failures.
 
 ## Install
 
 ```bash
-npm install @xdapps/ai ai zod
+npm install @xdappsdev/ai ai zod
 ```
 
 Install only the provider peer deps you actually use:
@@ -24,7 +24,7 @@ npm install @ai-sdk/google
 npm install @ai-sdk/deepseek
 ```
 
-For `@xdapps/ai/react`, also install:
+For `@xdappsdev/ai/react`, also install:
 
 ```bash
 npm install @ai-sdk/react react react-dom
@@ -33,7 +33,7 @@ npm install @ai-sdk/react react react-dom
 ## Quick Start
 
 ```ts
-import { defineAI } from "@xdapps/ai"
+import { defineAI } from "@xdappsdev/ai"
 
 const ai = defineAI({
   use: {
@@ -222,7 +222,7 @@ The three pieces below wire together a streaming chat widget. The file paths mat
 
 ```ts
 // lib/ai.ts
-import { defineAI } from "@xdapps/ai"
+import { defineAI } from "@xdappsdev/ai"
 
 export const ai = defineAI({
   use: {
@@ -242,7 +242,7 @@ export const ai = defineAI({
 ```ts
 // app/api/ai/[use]/route.ts
 import { ai } from "@/lib/ai"
-import { createChatRouteHandler } from "@xdapps/ai/next"
+import { createChatRouteHandler } from "@xdappsdev/ai/next"
 
 export const POST = createChatRouteHandler((opts) => ai.stream(opts))
 ```
@@ -250,7 +250,7 @@ export const POST = createChatRouteHandler((opts) => ai.stream(opts))
 ```tsx
 // components/ChatWidget.tsx
 "use client"
-import { useAiChat } from "@xdapps/ai/react"
+import { useAiChat } from "@xdappsdev/ai/react"
 
 export function ChatWidget() {
   const { messages, sendMessage, status } = useAiChat({ use: "customerChat" })
@@ -277,7 +277,7 @@ The use-case key (`customerChat`) is the contract: it must exist in `defineAI({ 
 `onFinish` fires after every call (success or failure) with a serialisable `CallLog`. Use it to persist usage to a database, ship to an observability backend, or track per-use-case costs.
 
 ```ts
-import { defineAI, type CallLog } from "@xdapps/ai"
+import { defineAI, type CallLog } from "@xdappsdev/ai"
 
 export const ai = defineAI({
   use: {
@@ -322,7 +322,7 @@ if (!result.ok) {
 return { text: result.text }
 ```
 
-## React Hook: `@xdapps/ai/react`
+## React Hook: `@xdappsdev/ai/react`
 
 The `useAiChat` hook is a thin wrapper over `@ai-sdk/react`'s `useChat` that auto-sets the API endpoint from your use-case key.
 
@@ -330,7 +330,7 @@ The `useAiChat` hook is a thin wrapper over `@ai-sdk/react`'s `useChat` that aut
 
 ```tsx
 "use client"
-import { useAiChat } from "@xdapps/ai/react"
+import { useAiChat } from "@xdappsdev/ai/react"
 
 export function ChatWidget() {
   const { messages, sendMessage, status } = useAiChat({ use: "customerChat" })
@@ -352,14 +352,14 @@ export function ChatWidget() {
 
 The hook returns the full `UseChatHelpers` object from `@ai-sdk/react` — all the same fields and methods are available.
 
-## Next.js Route Handler: `@xdapps/ai/next`
+## Next.js Route Handler: `@xdappsdev/ai/next`
 
 `createChatRouteHandler` produces a Next.js App Router `POST` handler that dispatches to your `ai.stream()` by the `[use]` parameter.
 
 ```ts
 // app/api/ai/[use]/route.ts
 import { ai } from "@/lib/ai"
-import { createChatRouteHandler } from "@xdapps/ai/next"
+import { createChatRouteHandler } from "@xdappsdev/ai/next"
 
 export const POST = createChatRouteHandler((opts) => ai.stream(opts))
 ```

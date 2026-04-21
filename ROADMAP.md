@@ -10,7 +10,7 @@ This document lists features explicitly deferred from `v1`. These are not forgot
 
 - **Agentic multi-step loops** — a `runAgent({ use, messages, tools, maxSteps })` method that loops tool-calls until done. Vercel AI SDK has `maxSteps` — we can expose it.
 
-- **Prompt templating** — something like `definePrompt('support', ({name}) => \`Help ${name}...\`)` for reusable, parameterized prompts. Could be a separate `@xdapps/ai-prompts` package.
+- **Prompt templating** — something like `definePrompt('support', ({name}) => \`Help ${name}...\`)` for reusable, parameterized prompts. Could be a separate `@xdappsdev/ai-prompts` package.
 
 - **Response caching** — hash `{use, messages}` → cache in Redis/KV. Useful for classifier use cases with repeated inputs.
 

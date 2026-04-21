@@ -17,5 +17,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial release with `text`, `stream`, `object`, `image`, `embed` methods.
 - Providers: anthropic, openai, google, deepseek (optional peer deps).
-- `@xdapps/ai/react` — `useAiChat` hook.
-- `@xdapps/ai/next` — `createChatRouteHandler`.
+- `@xdappsdev/ai/react` — `useAiChat` hook.
+- `@xdappsdev/ai/next` — `createChatRouteHandler`.
