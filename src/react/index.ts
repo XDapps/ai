@@ -1,2 +1,1 @@
-// Placeholder — implementation lands in Phase 4.
-export {}
+export { useAiChat } from "./use-ai-chat.js"
