@@ -27,7 +27,7 @@ export function resolveUse<U extends Record<string, UseCase>>(
   modality: Modality,
 ): LlmResult<Resolved> {
   if (args.use !== undefined) {
-    const profile = config.use[args.use] as UseCase | undefined
+    const profile = config.use[args.use]
 
     if (profile === undefined) {
       return {
