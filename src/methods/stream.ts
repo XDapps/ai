@@ -78,6 +78,17 @@ export async function stream<U extends Record<string, UseCase>>(
           usage,
         })
       },
+      onError: (event) => {
+        void logCall({
+          config,
+          use: useKey,
+          provider,
+          model,
+          modality: "text",
+          startTime,
+          error: normalizeError(event.error, provider),
+        })
+      },
     })
 
     // AI SDK v6 uses toUIMessageStreamResponse() for streaming UI responses.

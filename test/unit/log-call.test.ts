@@ -111,4 +111,34 @@ describe("logCall", () => {
     const log = onFinish.mock.calls[0]?.[0]
     expect(log.use).toBe(baseArgs.model)
   })
+
+  it("never throws when all logger methods throw", async () => {
+    const boom = () => {
+      throw new Error("logger totally broken")
+    }
+    const config = makeConfig({
+      logger: { info: boom, warn: boom, error: boom },
+    })
+    // success path — info throws
+    await expect(logCall({ ...baseArgs, config })).resolves.toBeUndefined()
+    // error path — warn throws, then error (dispatch error) also throws
+    const error = makeError("RATE_LIMITED", "too many requests", "anthropic")
+    await expect(logCall({ ...baseArgs, config, error })).resolves.toBeUndefined()
+  })
+
+  it("never throws when onFinish rejects and logger.error also throws", async () => {
+    const config = makeConfig({
+      logger: {
+        info: vi.fn(),
+        warn: vi.fn(),
+        error() {
+          throw new Error("error logger broken")
+        },
+      },
+      onFinish() {
+        return Promise.reject(new Error("onFinish rejected"))
+      },
+    })
+    await expect(logCall({ ...baseArgs, config })).resolves.toBeUndefined()
+  })
 })

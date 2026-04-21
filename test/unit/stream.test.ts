@@ -136,4 +136,75 @@ describe("stream()", () => {
     const response = result.toDataStreamResponse()
     expect(response.status).toBe(500)
   })
+
+  it("mid-stream onError fires logCall with a normalized LlmError (plain Error → UNKNOWN)", async () => {
+    const onFinish = vi.fn()
+    const configWithFinish = { ...config, onFinish }
+
+    // Capture the onError callback that stream() passes to streamText, then call it.
+    let capturedOnError: ((event: { error: unknown }) => void) | undefined
+    mockStreamText.mockImplementation(
+      (opts: { onError?: (event: { error: unknown }) => void }) => {
+        capturedOnError = opts.onError
+        return makeSdkStreamResult()
+      },
+    )
+
+    await stream(configWithFinish, {
+      use: "chat",
+      messages: [{ role: "user", content: "hi" }],
+    })
+
+    expect(capturedOnError).toBeDefined()
+
+    // Simulate a mid-stream failure with a plain Error → should normalize to UNKNOWN.
+    capturedOnError?.({ error: new Error("network drop") })
+
+    // logCall is async (void-fired), so flush microtasks.
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(onFinish).toHaveBeenCalledOnce()
+    const log = onFinish.mock.calls[0]?.[0]
+    expect(log.error).toBeDefined()
+    expect(log.error?.code).toBe("UNKNOWN")
+  })
+
+  it("mid-stream onError fires logCall with RATE_LIMITED for a 429 APICallError", async () => {
+    const { APICallError } = await import("ai")
+    const onFinish = vi.fn()
+    const configWithFinish = { ...config, onFinish }
+
+    let capturedOnError: ((event: { error: unknown }) => void) | undefined
+    mockStreamText.mockImplementation(
+      (opts: { onError?: (event: { error: unknown }) => void }) => {
+        capturedOnError = opts.onError
+        return makeSdkStreamResult()
+      },
+    )
+
+    await stream(configWithFinish, {
+      use: "chat",
+      messages: [{ role: "user", content: "hi" }],
+    })
+
+    const apiError = new APICallError({
+      message: "rate limited",
+      url: "https://api.anthropic.com",
+      requestBodyValues: {},
+      statusCode: 429,
+      responseHeaders: {},
+      responseBody: "",
+      isRetryable: true,
+    })
+
+    capturedOnError?.({ error: apiError })
+
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(onFinish).toHaveBeenCalledOnce()
+    const log = onFinish.mock.calls[0]?.[0]
+    expect(log.error?.code).toBe("RATE_LIMITED")
+  })
 })

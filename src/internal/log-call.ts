@@ -60,11 +60,17 @@ export async function logCall<U extends Record<string, UseCase>>(
     }
   } catch (dispatchErr) {
     // Swallow — logging/callback errors must never propagate to the caller.
-    config.logger?.error?.("llm.log.dispatch.error", {
-      message:
-        dispatchErr instanceof Error
-          ? dispatchErr.message
-          : String(dispatchErr),
-    })
+    // Wrap the error dispatch itself in a second try/catch so a broken logger
+    // cannot escape this function either (hard "never throws" guarantee).
+    try {
+      config.logger?.error?.("llm.log.dispatch.error", {
+        message:
+          dispatchErr instanceof Error
+            ? dispatchErr.message
+            : String(dispatchErr),
+      })
+    } catch {
+      // intentionally swallowed — error logger itself threw
+    }
   }
 }
