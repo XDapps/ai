@@ -1,5 +1,4 @@
 import { describe, it, expect } from "vitest"
-import { z } from "zod"
 import { defineAI } from "../../src/index.js"
 import { LlmFactoryError } from "../../src/internal/factory-error.js"
 
@@ -84,53 +83,4 @@ describe("defineAI", () => {
     }
   })
 
-  describe("method stubs throw not-implemented", () => {
-    const ai = defineAI(validConfig)
-
-    it("text() throws", () => {
-      expect(() =>
-        ai.text({
-          use: "customerChat",
-          messages: [{ role: "user", content: "hi" }],
-        }),
-      ).toThrow("not implemented")
-    })
-
-    it("stream() throws", () => {
-      expect(() =>
-        ai.stream({
-          use: "customerChat",
-          messages: [{ role: "user", content: "hi" }],
-        }),
-      ).toThrow("not implemented")
-    })
-
-    it("object() throws", () => {
-      expect(() =>
-        ai.object({
-          use: "customerChat",
-          schema: z.object({ name: z.string() }),
-          messages: [{ role: "user", content: "hi" }],
-        }),
-      ).toThrow("not implemented")
-    })
-
-    it("image() throws", () => {
-      expect(() =>
-        ai.image({
-          use: "productImage",
-          prompt: "a cat",
-        }),
-      ).toThrow("not implemented")
-    })
-
-    it("embed() throws", () => {
-      expect(() =>
-        ai.embed({
-          model: "openai:text-embedding-3-small",
-          values: ["hello"],
-        }),
-      ).toThrow("not implemented")
-    })
-  })
 })
