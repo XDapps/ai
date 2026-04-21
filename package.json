@@ -1,6 +1,6 @@
 {
   "name": "@xdappsdev/ai",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Internal LLM wrapper on Vercel AI SDK with use-case profiles",
   "license": "MIT",
   "type": "module",

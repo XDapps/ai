@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.1
+
+### Patch Changes
+
+- Version bump to recover from a registry-side reservation conflict on 0.1.0. No functional changes.
+
 ## 0.1.0
 
 ### Minor Changes
