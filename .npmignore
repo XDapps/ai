@@ -1,0 +1,12 @@
+src
+test
+tsconfig*.json
+vitest.config.ts
+tsup.config.ts
+eslint.config.*
+.prettierrc*
+.github
+.changeset
+docs
+ROADMAP.md
+CHANGELOG.md
