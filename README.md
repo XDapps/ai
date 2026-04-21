@@ -216,6 +216,90 @@ if (!result.ok) return
 console.log(result.embeddings) // number[][]
 ```
 
+## End-to-End Example (Next.js + React)
+
+The three pieces below wire together a streaming chat widget. The file paths matter — the React hook targets `/api/ai/{use}`, so the route folder must be named `[use]`.
+
+```ts
+// lib/ai.ts
+import { defineAI } from "@xdapps/ai"
+
+export const ai = defineAI({
+  use: {
+    customerChat: {
+      provider: "anthropic",
+      model: "claude-haiku-4-5",
+      modality: "text",
+      system: "You are a helpful support assistant.",
+    },
+  },
+  apiKeys: {
+    anthropic: process.env.ANTHROPIC_API_KEY,
+  },
+})
+```
+
+```ts
+// app/api/ai/[use]/route.ts
+import { ai } from "@/lib/ai"
+import { createChatRouteHandler } from "@xdapps/ai/next"
+
+export const POST = createChatRouteHandler((opts) => ai.stream(opts))
+```
+
+```tsx
+// components/ChatWidget.tsx
+"use client"
+import { useAiChat } from "@xdapps/ai/react"
+
+export function ChatWidget() {
+  const { messages, sendMessage, status } = useAiChat({ use: "customerChat" })
+
+  return (
+    <div>
+      {messages.map((m) => (
+        <p key={m.id}>
+          {m.parts.map((part, i) => (part.type === "text" ? <span key={i}>{part.text}</span> : null))}
+        </p>
+      ))}
+      <button onClick={() => sendMessage({ text: "Hello!" })} disabled={status !== "ready"}>
+        Send
+      </button>
+    </div>
+  )
+}
+```
+
+The use-case key (`customerChat`) is the contract: it must exist in `defineAI({ use: ... })` and must match the `use` prop passed to `useAiChat`. The `[use]` route folder dispatches to whichever profile the client requested.
+
+## Logging with `onFinish`
+
+`onFinish` fires after every call (success or failure) with a serialisable `CallLog`. Use it to persist usage to a database, ship to an observability backend, or track per-use-case costs.
+
+```ts
+import { defineAI, type CallLog } from "@xdapps/ai"
+
+export const ai = defineAI({
+  use: {
+    customerChat: { provider: "anthropic", model: "claude-haiku-4-5", modality: "text" },
+  },
+  apiKeys: { anthropic: process.env.ANTHROPIC_API_KEY },
+  onFinish: async (call: CallLog) => {
+    await db.aiCalls.insert({
+      use: call.use,
+      provider: call.provider,
+      model: call.model,
+      durationMs: call.durationMs,
+      inputTokens: call.inputTokens,
+      outputTokens: call.outputTokens,
+      errorCode: call.error?.code,
+    })
+  },
+})
+```
+
+`CallLog` fields: `use`, `provider`, `model`, `modality`, `durationMs`, optional `inputTokens` / `outputTokens`, and optional `error` (present only on failed calls).
+
 ## `LlmResult<T>` Narrowing
 
 All methods return `Promise<LlmResult<T>>`, a discriminated union:
