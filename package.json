@@ -54,7 +54,8 @@
     "test:integration": "RUN_INTEGRATION=1 vitest run test/integration",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "release": "changeset publish"
   },
   "peerDependencies": {
     "@ai-sdk/anthropic": "^3",
@@ -95,6 +96,7 @@
     "@ai-sdk/google": "^3.0.64",
     "@ai-sdk/openai": "^3.0.53",
     "@ai-sdk/react": "^3.0.170",
+    "@changesets/cli": "^2.31.0",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/react": "^16.3.2",
     "@types/node": "^25.6.0",
