@@ -24,7 +24,6 @@ export async function logCall<U extends Record<string, UseCase>>(
   const durationMs = Math.round(performance.now() - startTime)
 
   const log: CallLog = {
-    // Fall back to model string when no named use case was supplied.
     use: use ?? model,
     provider,
     model,

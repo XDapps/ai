@@ -2,12 +2,7 @@ import type { Provider, Modality, UseCase } from "../types/index.js"
 import type { DefineAIConfig } from "../types/index.js"
 import type { LlmResult } from "../types/index.js"
 import { makeError } from "../errors.js"
-
-const PROVIDERS = new Set<string>(["anthropic", "openai", "google", "deepseek"])
-
-function isProvider(value: string): value is Provider {
-  return PROVIDERS.has(value)
-}
+import { isProvider } from "./is-provider.js"
 
 export interface Resolved {
   provider: Provider

@@ -3,7 +3,6 @@ import type { UseCase } from "../types/providers.js"
 import type { DefineAIConfig } from "../types/config.js"
 import type { AI } from "../types/ai.js"
 import { normalizeError } from "../errors.js"
-import { logCall } from "../internal/log-call.js"
 import { runCallPreamble } from "../internal/run-call.js"
 
 type EmbedOpts<U extends Record<string, UseCase>> = Parameters<
@@ -27,7 +26,7 @@ export async function embed<U extends Record<string, UseCase>>(
     return { ok: false as const, error: preamble.error }
   }
 
-  const { resolved, providerInstance } = preamble
+  const { resolved, providerInstance, logSuccess, logFailure } = preamble
   const { provider, model } = resolved
 
   // ProviderV3 exposes embeddingModel(); textEmbeddingModel() is deprecated.
@@ -39,27 +38,12 @@ export async function embed<U extends Record<string, UseCase>>(
       values: opts.values,
     })
 
-    await logCall({
-      config,
-      use: useKey,
-      provider,
-      model,
-      modality: "embed",
-      startTime,
-    })
+    await logSuccess()
 
     return { ok: true as const, embeddings: result.embeddings }
   } catch (err) {
     const error = normalizeError(err, provider)
-    await logCall({
-      config,
-      use: useKey,
-      provider,
-      model,
-      modality: "embed",
-      startTime,
-      error,
-    })
+    await logFailure(error)
     return { ok: false as const, error }
   }
 }

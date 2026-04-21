@@ -1,15 +1,19 @@
+import type { LanguageModelUsage } from "ai"
 import type { UseCase, Modality, Provider } from "../types/providers.js"
-import type { LlmResult } from "../types/errors.js"
+import type { LlmResult, LlmError } from "../types/errors.js"
 import type { DefineAIConfig } from "../types/config.js"
 import type { Resolved } from "./resolve-use.js"
 import type { ProviderInstance } from "../providers/registry.js"
 import { resolveUse } from "./resolve-use.js"
 import { getProvider } from "../providers/registry.js"
 import { logCall } from "./log-call.js"
+import { isProvider } from "./is-provider.js"
 
 export interface RunCallReady {
   resolved: Resolved
   providerInstance: ProviderInstance
+  logSuccess: (usage?: LanguageModelUsage) => Promise<void>
+  logFailure: (error: LlmError) => Promise<void>
 }
 
 // Attempts to extract a Provider from a "provider:model" string.
@@ -19,19 +23,12 @@ function parseProvider(model: string | undefined): Provider | undefined {
   const colon = model.indexOf(":")
   if (colon === -1) return undefined
   const candidate = model.slice(0, colon)
-  if (
-    candidate === "anthropic" ||
-    candidate === "openai" ||
-    candidate === "google" ||
-    candidate === "deepseek"
-  ) {
-    return candidate
-  }
-  return undefined
+  return isProvider(candidate) ? candidate : undefined
 }
 
 // Shared preamble for all methods: resolve routing → load provider instance.
 // Logs failures when enough context is available and always returns an LlmResult.
+// On success, returns logSuccess/logFailure closures that methods call after their SDK call.
 export async function runCallPreamble<U extends Record<string, UseCase>>(
   config: DefineAIConfig<U>,
   args: { use?: string; model?: string },
@@ -72,9 +69,21 @@ export async function runCallPreamble<U extends Record<string, UseCase>>(
     return { ok: false, error: providerResult.error }
   }
 
+  const { provider, model } = resolved
+
+  function logSuccess(usage?: LanguageModelUsage): Promise<void> {
+    return logCall({ config, use: args.use, provider, model, modality, startTime, usage })
+  }
+
+  function logFailure(error: LlmError): Promise<void> {
+    return logCall({ config, use: args.use, provider, model, modality, startTime, error })
+  }
+
   return {
     ok: true,
     resolved,
     providerInstance: providerResult.provider,
+    logSuccess,
+    logFailure,
   }
 }

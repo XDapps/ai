@@ -3,7 +3,6 @@ import type { UseCase } from "../types/providers.js"
 import type { DefineAIConfig } from "../types/config.js"
 import type { AI } from "../types/ai.js"
 import { normalizeError } from "../errors.js"
-import { logCall } from "../internal/log-call.js"
 import { runCallPreamble } from "../internal/run-call.js"
 
 type ImageOpts<U extends Record<string, UseCase>> = Parameters<
@@ -40,7 +39,7 @@ export async function image<U extends Record<string, UseCase>>(
     return { ok: false as const, error: preamble.error }
   }
 
-  const { resolved, providerInstance } = preamble
+  const { resolved, providerInstance, logSuccess, logFailure } = preamble
   const { provider, model } = resolved
 
   const imageModel = providerInstance.imageModel(model)
@@ -57,14 +56,7 @@ export async function image<U extends Record<string, UseCase>>(
       ...(size !== undefined ? { size } : {}),
     })
 
-    await logCall({
-      config,
-      use: useKey,
-      provider,
-      model,
-      modality: "image",
-      startTime,
-    })
+    await logSuccess()
 
     const images = result.images.map((img) => ({
       base64: img.base64,
@@ -74,15 +66,7 @@ export async function image<U extends Record<string, UseCase>>(
     return { ok: true as const, images }
   } catch (err) {
     const error = normalizeError(err, provider)
-    await logCall({
-      config,
-      use: useKey,
-      provider,
-      model,
-      modality: "image",
-      startTime,
-      error,
-    })
+    await logFailure(error)
     return { ok: false as const, error }
   }
 }

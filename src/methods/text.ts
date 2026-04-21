@@ -3,7 +3,6 @@ import type { UseCase } from "../types/providers.js"
 import type { DefineAIConfig } from "../types/config.js"
 import type { AI } from "../types/ai.js"
 import { normalizeError } from "../errors.js"
-import { logCall } from "../internal/log-call.js"
 import { runCallPreamble } from "../internal/run-call.js"
 
 type TextOpts<U extends Record<string, UseCase>> = Parameters<AI<U>["text"]>[0]
@@ -28,7 +27,7 @@ export async function text<U extends Record<string, UseCase>>(
     return { ok: false, error: preamble.error }
   }
 
-  const { resolved, providerInstance } = preamble
+  const { resolved, providerInstance, logSuccess, logFailure } = preamble
   const { provider, model, profile } = resolved
 
   const textProfile = profile?.modality === "text" ? profile : undefined
@@ -49,15 +48,7 @@ export async function text<U extends Record<string, UseCase>>(
       ...(opts.tools !== undefined ? { tools: opts.tools } : {}),
     })
 
-    await logCall({
-      config,
-      use: useKey,
-      provider,
-      model,
-      modality: "text",
-      startTime,
-      usage: result.usage,
-    })
+    await logSuccess(result.usage)
 
     const toolCalls =
       result.toolCalls.length > 0 ? result.toolCalls : undefined
@@ -69,15 +60,7 @@ export async function text<U extends Record<string, UseCase>>(
     }
   } catch (err) {
     const error = normalizeError(err, provider)
-    await logCall({
-      config,
-      use: useKey,
-      provider,
-      model,
-      modality: "text",
-      startTime,
-      error,
-    })
+    await logFailure(error)
     return { ok: false, error }
   }
 }

@@ -3,8 +3,7 @@ import type { z } from "zod"
 import type { UseCase } from "../types/providers.js"
 import type { DefineAIConfig } from "../types/config.js"
 import type { AI } from "../types/ai.js"
-import { normalizeError } from "../errors.js"
-import { logCall } from "../internal/log-call.js"
+import { normalizeError, makeError } from "../errors.js"
 import { runCallPreamble } from "../internal/run-call.js"
 
 type ObjectOpts<
@@ -32,7 +31,7 @@ export async function object<
     return { ok: false as const, error: preamble.error }
   }
 
-  const { resolved, providerInstance } = preamble
+  const { resolved, providerInstance, logSuccess, logFailure } = preamble
   const { provider, model, profile } = resolved
 
   const textProfile = profile?.modality === "text" ? profile : undefined
@@ -48,32 +47,23 @@ export async function object<
       ...(system !== undefined ? { system } : {}),
     })
 
-    await logCall({
-      config,
-      use: useKey,
-      provider,
-      model,
-      modality: "text",
-      startTime,
-      usage: result.usage,
-    })
+    // generateObject validates against the schema internally, but its return type
+    // is InferSchema<T & ZodType> which TypeScript can't unify with z.infer<T>.
+    // safeParse re-narrows to z.infer<T> and routes validation failures to
+    // INVALID_RESPONSE rather than letting them escape as UNKNOWN.
+    const parsed = opts.schema.safeParse(result.object)
+    if (!parsed.success) {
+      const err = makeError("INVALID_RESPONSE", parsed.error.message, provider)
+      await logFailure(err)
+      return { ok: false as const, error: err }
+    }
 
-    // Parse through the schema to get a z.infer<T>-typed value.
-    // generateObject already validated the structure; this call re-narrows the type
-    // so TypeScript sees z.infer<T> rather than AI SDK's conditional InferSchema<T>.
-    const parsed: z.infer<T> = opts.schema.parse(result.object)
-    return { ok: true as const, object: parsed }
+    await logSuccess(result.usage)
+
+    return { ok: true as const, object: parsed.data }
   } catch (err) {
     const error = normalizeError(err, provider)
-    await logCall({
-      config,
-      use: useKey,
-      provider,
-      model,
-      modality: "text",
-      startTime,
-      error,
-    })
+    await logFailure(error)
     return { ok: false as const, error }
   }
 }

@@ -4,7 +4,6 @@ import type { LlmError } from "../types/errors.js"
 import type { DefineAIConfig } from "../types/config.js"
 import type { AI, LlmStreamResult } from "../types/ai.js"
 import { normalizeError } from "../errors.js"
-import { logCall } from "../internal/log-call.js"
 import { runCallPreamble } from "../internal/run-call.js"
 
 type StreamOpts<U extends Record<string, UseCase>> = Parameters<
@@ -15,10 +14,7 @@ type StreamOpts<U extends Record<string, UseCase>> = Parameters<
 // This lets callers consume stream() uniformly even for pre-stream failures.
 function errorStream(error: LlmError): LlmStreamResult {
   async function* failingIterable(): AsyncGenerator<string> {
-    const cause = error
-    throw Object.assign(new Error(error.message), { cause })
-    // yield is unreachable but TypeScript needs it to infer AsyncGenerator<string>
-    yield ""
+    throw Object.assign(new Error(error.message), { cause: error })
   }
   return {
     textStream: failingIterable(),
@@ -49,7 +45,7 @@ export async function stream<U extends Record<string, UseCase>>(
     return errorStream(preamble.error)
   }
 
-  const { resolved, providerInstance } = preamble
+  const { resolved, providerInstance, logSuccess, logFailure } = preamble
   const { provider, model, profile } = resolved
 
   const textProfile = profile?.modality === "text" ? profile : undefined
@@ -68,26 +64,10 @@ export async function stream<U extends Record<string, UseCase>>(
       ...(maxOutputTokens !== undefined ? { maxOutputTokens } : {}),
       ...(opts.tools !== undefined ? { tools: opts.tools } : {}),
       onFinish: ({ usage }) => {
-        void logCall({
-          config,
-          use: useKey,
-          provider,
-          model,
-          modality: "text",
-          startTime,
-          usage,
-        })
+        void logSuccess(usage)
       },
       onError: (event) => {
-        void logCall({
-          config,
-          use: useKey,
-          provider,
-          model,
-          modality: "text",
-          startTime,
-          error: normalizeError(event.error, provider),
-        })
+        void logFailure(normalizeError(event.error, provider))
       },
     })
 
@@ -102,15 +82,7 @@ export async function stream<U extends Record<string, UseCase>>(
     }
   } catch (err) {
     const error = normalizeError(err, provider)
-    await logCall({
-      config,
-      use: useKey,
-      provider,
-      model,
-      modality: "text",
-      startTime,
-      error,
-    })
+    await logFailure(error)
     return errorStream(error)
   }
 }
