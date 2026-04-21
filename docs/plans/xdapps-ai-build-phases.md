@@ -20,6 +20,56 @@ This document phases that work into **5 build phases**. Each phase is independen
 
 ---
 
+## Cross-Cutting Standards — Apply to Every Phase
+
+These rules are **non-negotiable** for every phase. The reviewer agent must enforce them. The builder agent must bake them in from the start — do not ship a file that violates any of these "because it'll be cleaned up later."
+
+### Readability
+- **Line budget per file:** aim for ≤150 lines, hard cap ≤250. If a file crosses 150, pause and split *before* continuing to add to it.
+- **One concept per file.** A file's name should describe exactly what's in it; if the name needs "and" or "utils" or "helpers," split it.
+- **Explicit over clever.** A named intermediate variable beats a chained one-liner. A function that does one thing beats a flag-parameter function that does two.
+- **Comments explain *why*, not *what*.** If a reader could derive the "what" by reading the code, no comment. Comments are reserved for: hidden constraints, workarounds, surprising invariants, or cross-file coupling.
+
+### Abstraction rules — extract when, not before
+Premature abstraction is as bad as no abstraction. The trigger points:
+- **Duplication:** same logic in 2+ places → extract to a named helper. Not 3 places. Two is the signal.
+- **Mixed concerns:** a function that does IO + transformation + logging → split by concern.
+- **Boilerplate across call-sites:** if every method file is doing `resolveUse → getProvider → logCall` in the same shape → extract a `runCall(config, opts, fn)` wrapper in `src/internal/` and collapse each method body to just the AI-SDK-specific call.
+- **Repeated type shapes:** if three types share `{ use?, model? }` → extract a `BaseCallOpts` and `extends` it.
+
+### When NOT to abstract
+- Hypothetical future flexibility ("in case we add a 6th provider"). Four providers aren't ten; don't build for ten.
+- Configuration knobs nothing consumes today.
+- "Just in case" wrappers around single-line SDK calls.
+
+### Directory layout — keep shallow but meaningful
+- `src/types/` — split by topic (`providers.ts`, `errors.ts`, `config.ts`, `ai.ts`), never one megafile.
+- `src/methods/` — one file per method, each ≤150 lines. If `text.ts` crosses 150, `runCall` isn't doing enough; extract more.
+- `src/internal/` — shared non-public helpers. Every file here must be used by ≥2 callers. If only one caller, inline it.
+- `src/providers/` — one file per provider; `registry.ts` is the only module that knows about all four.
+- Barrel (`index.ts`) re-exports in every multi-file directory so external import paths stay stable even when internals move.
+
+### Naming
+- **Files:** kebab-case, describe the export (`resolve-use.ts`, `normalize-error.ts`, `log-call.ts`).
+- **Exports:** match the file's primary export name. One primary export per file is the default; co-located helpers allowed only if private (not exported from the file).
+- **No generic names:** no `utils.ts`, no `helpers.ts`, no `common.ts`, no `shared.ts`. If you're tempted, you haven't named the concept yet.
+
+### TypeScript hygiene
+- Zero `any`. Zero `as Type` casting. Zero `@ts-ignore` / `@ts-expect-error`.
+- `import type` for type-only imports (required by `verbatimModuleSyntax`).
+- Internal imports use `.js` extension (NodeNext requirement).
+- Prefer discriminated unions over optional-everything objects.
+
+### Before committing a phase — self-review checklist
+The reviewer will check these; you should check them first:
+1. Can any file be split without contorting its callers? If yes, split it.
+2. Does any two-file pair share ≥10 lines of identical logic? If yes, extract.
+3. Does every public export have a clear, single purpose? If not, rename or split.
+4. Is there any commented-out code, any `TODO:` without a tracking reference, any `// for now` that's about to ship? Remove or resolve.
+5. Would a new contributor understand each file's purpose from its name alone?
+
+---
+
 ## Phase Overview
 
 | Phase | Name | Source plan steps | Outcome |
@@ -39,6 +89,9 @@ This document phases that work into **5 build phases**. Each phase is independen
 **Goal:** Stand up the repo, configure all tooling, write all types, get a clean `typecheck` + `build` pass with zero functional code.
 
 ### Actions
+
+> Before writing code, re-read the **Cross-Cutting Standards** section at the top of this doc. File-size budgets, abstraction rules, and naming conventions apply. The reviewer will fail the phase on violations.
+
 1. Create the GitHub repo: `gh repo create XDapps/ai --public --description "Internal LLM wrapper on Vercel AI SDK with use-case profiles"`. Clone is unnecessary — the local directory `/Users/jerry/Documents/code/ai/` already exists; instead `git init`, `git remote add origin git@github.com:XDapps/ai.git` (or https equivalent), then push.
 2. Initialize `package.json` (`name: "@xdapps/ai"`, `version: "0.0.0"`, `type: "module"`).
 3. Add `LICENSE` (MIT), `.gitignore` (`node_modules`, `dist`, `.env*`, `coverage`), `.npmignore` (`src`, `test`, `tsconfig*`, `vitest.config.ts`, `tsup.config.ts`, `.eslintrc*`).
@@ -54,6 +107,13 @@ This document phases that work into **5 build phases**. Each phase is independen
 13. Initial commit: `chore: scaffold @xdapps/ai package`. Push to `main`.
 
 ### Exit Criteria
+
+Structural (must pass):
+- Every file in the phase's diff satisfies the Cross-Cutting Standards (file ≤150 lines target, ≤250 hard cap; one concept per file; no `any`/`as`/`@ts-ignore`; no generic-named `utils.ts`/`helpers.ts`).
+- No duplication of ≥10 lines between any two files in `src/`.
+- The self-review checklist from the Cross-Cutting Standards section has been run and every item is a "yes."
+
+Functional:
 - `gh repo view XDapps/ai` returns a public repo.
 - `npm install` completes clean.
 - `npm run typecheck` passes.
@@ -70,6 +130,9 @@ This document phases that work into **5 build phases**. Each phase is independen
 **Goal:** Implement the non-method internals — error normalization, provider registry, config validation, the `defineAI` factory, and the use-case resolver. Methods remain stubs that throw `not implemented` (will land in Phase 3).
 
 ### Actions
+
+> Before writing code, re-read the **Cross-Cutting Standards** section at the top of this doc. File-size budgets, abstraction rules, and naming conventions apply. The reviewer will fail the phase on violations.
+
 1. **Step 4** — `src/errors.ts`: `LlmError`, `LlmErrorCode`, `normalizeError(err, provider)` mapping Vercel SDK error classes (`AI_APICallError`, `AI_RateLimitError`, etc.) and HTTP codes to our enum. Unit tests for every mapping.
 2. **Step 5** — `src/providers/`:
    - `registry.ts` with `getProvider(p, apiKey)` that dynamically `await import('@ai-sdk/...')` and caches by `(provider, apiKey)`.
@@ -83,6 +146,13 @@ This document phases that work into **5 build phases**. Each phase is independen
 7. Commit: `feat: implement defineAI factory, error normalization, provider registry, use-case resolver`. Push.
 
 ### Exit Criteria
+
+Structural (must pass):
+- Every file in the phase's diff satisfies the Cross-Cutting Standards (file ≤150 lines target, ≤250 hard cap; one concept per file; no `any`/`as`/`@ts-ignore`; no generic-named `utils.ts`/`helpers.ts`).
+- No duplication of ≥10 lines between any two files in `src/`.
+- The self-review checklist from the Cross-Cutting Standards section has been run and every item is a "yes."
+
+Functional:
 - `npm test` — all unit tests pass.
 - `npm run typecheck` + `npm run lint` pass.
 - A throwaway test script can call `defineAI({...})` with a valid config and receive a typed `ai` object back. Calling any method throws `not implemented` (expected at this checkpoint).
@@ -98,6 +168,9 @@ This document phases that work into **5 build phases**. Each phase is independen
 **Goal:** Replace the five method stubs with full implementations that wrap Vercel AI SDK and emit logging. After this phase, the package is functionally complete for Node consumers (React/Next sub-paths come in Phase 4).
 
 ### Actions
+
+> Before writing code, re-read the **Cross-Cutting Standards** section at the top of this doc. File-size budgets, abstraction rules, and naming conventions apply. The reviewer will fail the phase on violations.
+
 1. **Step 10 (do first — others depend on it)** — `src/internal/log-call.ts`: `logCall({ config, use, provider, model, modality, startTime, result, error? })`. Computes `durationMs`, extracts `inputTokens`/`outputTokens` from Vercel `usage`, dispatches to `config.logger` (info on success, warn on error) and `config.onFinish` (always). **Never throws** — wrap in try/catch internally.
 2. **Step 9** — `src/methods/text.ts`: resolve → `getProvider` → Vercel `generateText({ model, messages, temperature, maxTokens, system, tools })`. Try/catch → on error `normalizeError` + `logCall(error)` + return `{ ok: false, error }`. On success `logCall(result)` + return `{ ok: true, text, toolCalls }`.
 3. **Step 11** — `src/methods/stream.ts`: same resolution → Vercel `streamText`. Wrap return as `{ textStream, fullStream, toDataStreamResponse() }` — pass-throughs of Vercel's stream object. `logCall` fires inside Vercel's `onFinish` callback. If the initial call throws (pre-stream), return `LlmResult` failure; mid-stream errors flow through Vercel's existing error channel.
@@ -109,6 +182,13 @@ This document phases that work into **5 build phases**. Each phase is independen
 9. Commit per method or single `feat: implement text/stream/object/image/embed methods with logging`. Push.
 
 ### Exit Criteria
+
+Structural (must pass):
+- Every file in the phase's diff satisfies the Cross-Cutting Standards (file ≤150 lines target, ≤250 hard cap; one concept per file; no `any`/`as`/`@ts-ignore`; no generic-named `utils.ts`/`helpers.ts`).
+- No duplication of ≥10 lines between any two files in `src/`.
+- The self-review checklist from the Cross-Cutting Standards section has been run and every item is a "yes."
+
+Functional:
 - `npm test` — all unit tests pass with ≥80% coverage on `src/methods/` and `src/internal/`.
 - `npm run typecheck` + `npm run lint` pass.
 - Manual smoke test (one-off Node script, deleted after): `defineAI` → `await ai.text(...)` returns `{ ok: true, text: '...' }` against a real Anthropic API key. Run again with a deliberately wrong key → returns `{ ok: false, error: { code: 'AUTH_FAILED' } }`.
@@ -123,6 +203,9 @@ This document phases that work into **5 build phases**. Each phase is independen
 **Goal:** Implement the two sub-path entry points. After this, consumers can both call `ai.text(...)` from server code and use `useAiChat({ use: 'customerChat' })` from React.
 
 ### Actions
+
+> Before writing code, re-read the **Cross-Cutting Standards** section at the top of this doc. File-size budgets, abstraction rules, and naming conventions apply. The reviewer will fail the phase on violations.
+
 1. **Step 15** — `src/react/use-ai-chat.ts`: thin wrapper over `@ai-sdk/react`'s `useChat`. Auto-sets `api: \`/api/ai/${use}\``. Add `@ai-sdk/react`, `react`, `react-dom` to optional peer deps. Add `src/react/index.ts` that re-exports the hook.
 2. **Step 16** — `src/next/create-chat-route-handler.ts`: `createChatRouteHandler(ai)` returning `async (req, ctx) => Response`. Validates `ctx.params.use`, parses body for `messages`, calls `ai.stream({ use, messages })`, returns `result.toDataStreamResponse()`. On invalid `use` → 400 JSON. On stream error → 500 JSON. Add `src/next/index.ts` re-exporting it.
 3. Update `vitest.config.ts` with a jsdom environment override for `test/unit/use-ai-chat.test.ts` (per-file environment via Vitest's `// @vitest-environment jsdom` pragma is fine).
@@ -133,6 +216,13 @@ This document phases that work into **5 build phases**. Each phase is independen
 6. Commit: `feat: add @xdapps/ai/react useAiChat hook and @xdapps/ai/next createChatRouteHandler`. Push.
 
 ### Exit Criteria
+
+Structural (must pass):
+- Every file in the phase's diff satisfies the Cross-Cutting Standards (file ≤150 lines target, ≤250 hard cap; one concept per file; no `any`/`as`/`@ts-ignore`; no generic-named `utils.ts`/`helpers.ts`).
+- No duplication of ≥10 lines between any two files in `src/`.
+- The self-review checklist from the Cross-Cutting Standards section has been run and every item is a "yes."
+
+Functional:
 - `npm test` passes (including new React/Next tests).
 - `npm run build` produces all three entry points in `dist/`.
 - A throwaway consumer script can `import { useAiChat } from '@xdapps/ai/react'` and `import { createChatRouteHandler } from '@xdapps/ai/next'` from the built `dist/` without resolution errors.
@@ -147,6 +237,9 @@ This document phases that work into **5 build phases**. Each phase is independen
 **Goal:** Production-ready: comprehensive tests, complete docs, working CI, and the package **published as `@xdapps/ai@0.1.0` on npm**.
 
 ### Actions
+
+> Before writing code, re-read the **Cross-Cutting Standards** section at the top of this doc. File-size budgets, abstraction rules, and naming conventions apply. The reviewer will fail the phase on violations.
+
 1. **Step 17 — Tests:**
    - Backfill any unit-test gaps to hit ≥80% coverage on the whole `src/` tree.
    - Write `test/integration/anthropic.test.ts` (and openai, google, deepseek). Each test makes one real call ("Say 'ok'") and asserts `result.ok === true`. Gate the entire `test/integration/` directory behind `RUN_INTEGRATION=1` env var. Wire `test:integration` script to set it.
@@ -167,6 +260,13 @@ This document phases that work into **5 build phases**. Each phase is independen
 5. Commit: `chore: add tests, docs, CI, and release workflow` (then a follow-up `chore: changeset for 0.1.0`).
 
 ### Exit Criteria
+
+Structural (must pass):
+- Every file in the phase's diff satisfies the Cross-Cutting Standards (file ≤150 lines target, ≤250 hard cap; one concept per file; no `any`/`as`/`@ts-ignore`; no generic-named `utils.ts`/`helpers.ts`).
+- No duplication of ≥10 lines between any two files in `src/`.
+- The self-review checklist from the Cross-Cutting Standards section has been run and every item is a "yes."
+
+Functional:
 - `npm test` passes with ≥80% coverage.
 - `RUN_INTEGRATION=1 npm run test:integration` passes for at least Anthropic + OpenAI (Google/DeepSeek if keys are available).
 - `npm run build` clean.
