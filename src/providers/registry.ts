@@ -13,7 +13,15 @@ export type ProviderInstance =
   | Awaited<ReturnType<typeof loadDeepSeek>>
 
 // Cache keyed by "provider:apiKey" so different keys get distinct instances.
-const cache = new Map<string, ProviderInstance>()
+const cache = new Map<string, Promise<ProviderInstance>>()
+
+function isModuleNotFoundError(err: unknown): boolean {
+  return (
+    err instanceof Error &&
+    "code" in err &&
+    (err.code === "ERR_MODULE_NOT_FOUND" || err.code === "MODULE_NOT_FOUND")
+  )
+}
 
 async function load(p: Provider, apiKey: string): Promise<ProviderInstance> {
   switch (p) {
@@ -33,23 +41,31 @@ export async function getProvider(
   apiKey: string,
 ): Promise<LlmResult<{ provider: ProviderInstance }>> {
   const key = `${p}:${apiKey}`
-  const cached = cache.get(key)
-  if (cached !== undefined) {
-    return { ok: true, provider: cached }
+  let promise = cache.get(key)
+
+  if (promise === undefined) {
+    // Insert the in-flight promise immediately so concurrent callers share it.
+    promise = load(p, apiKey)
+    cache.set(key, promise)
+    // Remove the entry on failure so a later retry can try again.
+    promise.catch(() => { cache.delete(key) })
   }
 
   try {
-    const instance = await load(p, apiKey)
-    cache.set(key, instance)
+    const instance = await promise
     return { ok: true, provider: instance }
-  } catch {
-    return {
-      ok: false,
-      error: makeError(
-        "MISSING_PROVIDER_PKG",
-        `Install @ai-sdk/${p} to use the '${p}' provider.`,
-        p,
-      ),
+  } catch (err) {
+    if (isModuleNotFoundError(err)) {
+      return {
+        ok: false,
+        error: makeError(
+          "MISSING_PROVIDER_PKG",
+          `Install @ai-sdk/${p} to use the '${p}' provider.`,
+          p,
+        ),
+      }
     }
+    const errMessage = err instanceof Error ? err.message : String(err)
+    return { ok: false, error: makeError("UNKNOWN", errMessage, p) }
   }
 }

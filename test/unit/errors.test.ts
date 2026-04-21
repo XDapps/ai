@@ -115,15 +115,29 @@ describe("normalizeError", () => {
       expect(result.code).toBe("CONTENT_FILTERED")
     })
 
-    it("detects 'safety' in message → CONTENT_FILTERED", () => {
-      const err = new Error("Response blocked for safety reasons.")
+    it("detects 'safety_filter' in message → CONTENT_FILTERED", () => {
+      const err = new Error("Response blocked by safety_filter.")
       const result = normalizeError(err, "anthropic")
       expect(result.code).toBe("CONTENT_FILTERED")
     })
 
-    it("detects 'filtered' in message → CONTENT_FILTERED", () => {
-      const err = new Error("Output was filtered by the model.")
+    it("detects 'content_filter' in message → CONTENT_FILTERED", () => {
+      const err = new Error("Output was blocked by content_filter.")
       const result = normalizeError(err, "anthropic")
+      expect(result.code).toBe("CONTENT_FILTERED")
+    })
+
+    it("APICallError 429 with 'safety' in message → RATE_LIMITED (not CONTENT_FILTERED)", () => {
+      // Ordering-bug regression: status-code classification must win over content-filter check.
+      const err = makeApiCallError({ statusCode: 429, message: "rate limited for platform safety" })
+      const result = normalizeError(err, "openai")
+      expect(result.code).toBe("RATE_LIMITED")
+      expect(result.retryable).toBe(true)
+    })
+
+    it("APICallError 400 with 'content_policy' (no context/token keyword) → CONTENT_FILTERED", () => {
+      const err = makeApiCallError({ statusCode: 400, message: "Request violates content_policy." })
+      const result = normalizeError(err, "openai")
       expect(result.code).toBe("CONTENT_FILTERED")
     })
   })

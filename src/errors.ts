@@ -19,8 +19,12 @@ function isContentFiltered(message: string): boolean {
   const lower = message.toLowerCase()
   return (
     lower.includes("content_policy") ||
-    lower.includes("safety") ||
-    lower.includes("filtered")
+    lower.includes("content policy") ||
+    lower.includes("content_filter") ||
+    lower.includes("content filter") ||
+    lower.includes("safety_filter") ||
+    lower.includes("safety filter") ||
+    lower.includes("blocked by safety")
   )
 }
 
@@ -31,13 +35,9 @@ function isContextTooLong(message: string): boolean {
 
 function normalizeApiCallError(err: APICallError, provider: Provider): LlmError {
   const msg = err.message
-
-  if (isContentFiltered(msg)) {
-    return makeError("CONTENT_FILTERED", msg, provider)
-  }
-
   const status = err.statusCode
 
+  // Status-code classification wins; content-filter is the fallback for 400/undefined.
   if (status === 429) {
     return makeError("RATE_LIMITED", msg, provider)
   }
@@ -50,6 +50,9 @@ function normalizeApiCallError(err: APICallError, provider: Provider): LlmError 
   if (status !== undefined && status >= 500 && status < 600) {
     return makeError("PROVIDER_UNAVAILABLE", msg, provider)
   }
+  if (isContentFiltered(msg)) {
+    return makeError("CONTENT_FILTERED", msg, provider)
+  }
 
   return makeError("UNKNOWN", msg, provider)
 }
@@ -61,10 +64,6 @@ export function normalizeError(err: unknown, provider: Provider): LlmError {
   }
 
   const message = err.message
-
-  if (isContentFiltered(message)) {
-    return makeError("CONTENT_FILTERED", message, provider)
-  }
 
   // Use the SDK's own isInstance guards — stable across bundler boundaries.
   if (APICallError.isInstance(err)) {
@@ -94,6 +93,11 @@ export function normalizeError(err: unknown, provider: Provider): LlmError {
     name === "AI_NoContentGeneratedError"
   ) {
     return makeError("INVALID_RESPONSE", message, provider)
+  }
+
+  // Content-filter fallback: only reached for unclassified errors after all specific checks.
+  if (isContentFiltered(message)) {
+    return makeError("CONTENT_FILTERED", message, provider)
   }
 
   return makeError("UNKNOWN", message, provider)
